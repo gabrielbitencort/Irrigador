@@ -1,100 +1,87 @@
-#define BLYNK_TEMPLATE_ID "TMPL0nWhjDJh"
-#define BLYNK_TEMPLATE_NAME = "NdoeMCU"
+#define BLYNK_TEMPLATE_ID "id"  //ID do projeto
+#define BLYNK_TEMPLATE_NAME = "nome"   //Nome do projeto
+#define BLYNK_PRINT Serial
 
-#include <ESP8266WiFi.h>        //biblioteca para uso do esp8266
-#include <BlynkSimpleEsp8266.h> //biblioteca para uso do esp8266 no Blynk
-#include <user_interface.h>     //biblioteca para uso do temporizador
-#include <DHT.h>                //biblioteca para uso do DHT11
+#include <ESP8266WiFi.h>        //Biblioteca para uso do esp8266
+#include <BlynkSimpleEsp8266.h>   //Biblioteca para uso do esp8266 no blynk
+#include <Wire.h>
+#include <Adafruit_Sensor.h>
+#include <Adafruit_BMP085.h>
 
-char auth[] = "w3U5Znsk_02ERjes0jefqCxq0ZoGx8V1"; //auth token do projeto
-char ssid[] = "NORT _Fernando"; //nome do wifi
-char pass[] = "s1a2r3a4"; //senha do wifi
+char auth[] = "token"; //Auth token do projeto
+char ssid[] = "wifi"; //Nome do wifi
+char pass[] = "senha";       //Senha do wifi
 
-#define umid A0   //define pino A0 para sensor de umidade
-#define relay 15  //define pino 15 para rele
+#define sensor A0   //Define pino A0 para sensor de umidade
+#define relay 15    //Define pino 15 para relé
 
-#define DHTPIN 4      //define pino 4 para sensor temperatura
-#define DHTTYPE DHT11 //define tipo de sensor de temperatura
+Adafruit_BMP085 bmp; //define bmp como um objeto adafruit_bmp085
 
-BlynkTimer timer; //inicializa o objeto timer do tipo BlinkTimer
-DHT dht(DHTPIN, DHTTYPE); 
-
-const int threshold = 40; //valor de referência do sensor
-int value;                //valor de leitura do sensor
-int dry = 1024;           //valor do sensor com terra seca
-int wet = 290;            //valor do sensor com terra molhada
-int mili = 60000;         //valor de 1 minuto em milissegundos
-
-os_timer_t sensorTimer;
-os_timer_t relayTimer;
+int value;        //valor de leitura do sensor
+int dry = 1024;   //valor do sensor com terra seca
+int wet = 0;      //valor do sensor com terra molhada
 
 bool relayActive = false;
 
-void checkSensor(void *arg)
-{
-  value = analogRead(umid);
-  value = map(value, dry, wet, 0, 100);
-  Serial.println(value);
-  if(!relayActive && value <= threshold)
-  {
-    digitalWrite(relay, HIGH);
-    relayActive = true;
-    os_timer_t(&relayTimer, (1*mili), false);
-  }
-}
+int ref = 0;            //valor de referência do sensor
+int relayStartTime = 0; //tempo de inicio do relé
+const int relayDuration = 30000;  //duração do relé em milissegundos(30 segundos)
 
-void turnOffRelay(void *arg)
+BLYNK_WRITE(V9)
 {
-  digitalWrite(relay, LOW);
-  relayActive = false;
-}
-
-void blynktempSensor()
-{
-  float temp = dht.readTemperature();
-  if (isnan(temp))
-  {
-    Serial.println("Falha ao ler dados do sensor DHT11!   ");
-    return;
-  }
-  Blynk.virtualWrite(V6, temp);
-}
-
-void blynkumidSensor()
-{
-  value = analogRead(umid);
-  value = map(value, dry, wet, 0, 100);
-  // Serial.print("Umidity finded: ");
-  // Serial.print(value);
-  // Serial.println(" %");
-
-  // if(value < 40){
-  //   digitalWrite(relay, HIGH);
-  // }else {
-  //   digitalWrite(relay, LOW);
-  //   Serial.print("Solo está molhado.  ");
-  // }
-  blynktempSensor();
-  Blynk.virtualWrite(V7, value);
+  ref = param.asInt();  //atualiza o valor de ref com o valor do slider
 }
 
 void setup()
 {
-  Serial.begin(115200);           //inicializa comunicação serial
+  Serial.begin(115200);           //inicializa cominição serial
   Blynk.begin(auth, ssid, pass);  //inicializa Blynk
-  dht.begin();                    //inicializa o sensor DHT11
-  timer.setInterval(1000L, blynkumidSensor);
-  pinMode(umid, INPUT);
-  pinMode(relay, HIGH);
-  pinMode(relay, OUTPUT);
-
-  os_timer_setfn(&sensorTimer, checkSensor, NULL);
-  os_timer_arm(&sensorTimer, (2*mili), true);
-  os_timer_setfn(&relayTimer, turnOffRelay, NULL);
+  bmp.begin();
+  pinMode(sensor, INPUT);   //define sensor como entrada
+  pinMode(relay, OUTPUT);   //define relé como saida
 }
 
 void loop()
 {
   Blynk.run();  //chama a função Blynk.run()
-  timer.run();  //chama a função timer.run()
+
+  if(!bmp.begin()) 
+  {
+    Serial.println("Não foi possivel encontrar o sensor BMP180.");
+    while (1);
+  }
+
+  float temp = bmp.readTemperature();   //lê o sensor de temperatura
+  value = analogRead(sensor);           //lê o sensor de umidade
+  value = map(value, dry, wet, 0, 100); //transforma em porcentagem
+
+  Blynk.virtualWrite(V6, temp);   //envia valor da temperatura para o Blynk
+  Blynk.virtualWrite(V7, value);  //envia valor da umidade para o Blynk
+
+  Serial.print("Temperatura: ");
+  Serial.print(temp);
+  Serial.println(" °C");
+
+  Serial.print("Umidade: ");
+  Serial.print(value);
+  Serial.println(" %");
+
+  Serial.print("Limite: ");
+  Serial.print(ref);
+  Serial.println(" %");
+  delay(1000);
+
+  if(!relayActive && value <= ref)  //liga relé se relayActive for falso e valor <= ref
+  {
+    Serial.println("Ligando relé.");
+    digitalWrite(relay, HIGH);
+    relayActive = true;
+    relayStartTime = millis();
+  }
+  else if(relayActive && (millis() - relayStartTime >= relayDuration)) //desliga relé se relayActive for verdadeiro e valor > ref
+  {
+    Serial.println("Desligando relé.");
+    digitalWrite(relay, LOW);
+    relayActive = false;
+  }
 }
