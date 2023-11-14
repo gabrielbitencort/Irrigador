@@ -1,16 +1,16 @@
-#define BLYNK_TEMPLATE_ID "id"  //ID do projeto
-#define BLYNK_TEMPLATE_NAME = "nome"   //Nome do projeto
+#define BLYNK_TEMPLATE_ID "id"        //ID do projeto
+#define BLYNK_TEMPLATE_NAME = "nome"  //Nome do projeto
 #define BLYNK_PRINT Serial
 
 #include <ESP8266WiFi.h>        //Biblioteca para uso do esp8266
-#include <BlynkSimpleEsp8266.h>   //Biblioteca para uso do esp8266 no blynk
+#include <BlynkSimpleEsp8266.h> //Biblioteca para uso do esp8266 no blynk
 #include <Wire.h>
 #include <Adafruit_Sensor.h>
-#include <Adafruit_BMP085.h>
+#include <Adafruit_BMP085.h>    //biblioteca para uso do bmp180
 
-char auth[] = "token"; //Auth token do projeto
-char ssid[] = "wifi"; //Nome do wifi
-char pass[] = "senha";       //Senha do wifi
+char auth[] = "token";  //Auth token do projeto
+char ssid[] = "wifi";   //Nome do wifi
+char pass[] = "senha";  //Senha do wifi
 
 #define sensor A0   //Define pino A0 para sensor de umidade
 #define relay 15    //Define pino 15 para relé
